@@ -3,18 +3,13 @@ import board
 import os
 from time import sleep
 from digitalio import DigitalInOut, Direction
-#led = DigitalInOut(board.PL3)
-#led.direction = Direction.OUTPUT
 
-#led.value = 1
-#sleep(60)
-#led.value = 0
-
+PI12 = DigitalInOut(board.PI12)
+PI12.direction = Direction.OUTPUT
+PI12.value = 1
 control_path = {
-    0: "/sys/class/pwm/pwmchip0",
-    1: "/sys/class/pwm/pwmchip16",
-    2: "/sys/class/pwm/pwmchip20",
-    3: "/sys/class/pwm/pwmchip22",
+    0: "/sys/class/pwm/pwmchip0"
+
 }
 
 def write_to_file(path: str, value: str) -> None:
@@ -41,8 +36,10 @@ def pwm_disable(control: int, channel: int) -> None:
 
     write_to_file(f"{control_path[control]}/pwm{channel}/enable", "0")
 
-pwm_export(3, 1)  
-pwm_config(3, 1, 10000000, 5000000)  
-pwm_enable(3, 1)  
-sleep(60)
-pwm_disable(3, 1)
+pwm_export(0, 1)  
+pwm_config(0, 1, 10000000,5000000)  
+pwm_enable(0, 1)  
+sleep(6)
+
+
+pwm_disable(0, 1)

@@ -13,13 +13,45 @@ import threading
 import numpy as np
 from PyQt5.QtCore import QThread, pyqtSignal, QObject, Qt, QTimer, QSize
 from PyQt5 import QtGui, QtWidgets, QtCore
+import fcntl
 
 counter = itertools.count(1)
-
+class SingleInstance:
+   
+    def __init__(self, lock_file="/tmp/camera_app.lock"):
+        self.lock_file = lock_file
+        self.lock_fd = None
+    
+    def __enter__(self):
+        
+        try:
+            self.lock_fd = open(self.lock_file, "w")
+        except IOError:
+            print("fauld")
+            os._exit(1)
+        
+        try:
+            fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (IOError, OSError):
+            print("running")
+            
+            os._exit(1)
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.lock_fd:
+            try:
+                fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
+                self.lock_fd.close()
+                if os.path.exists(self.lock_file):
+                    os.unlink(self.lock_file)
+            except:
+                pass
+            
 def get_camera_uuid_map():
     return {
-        '9f7f9c0b-bd09-53db-9a2b-20daffdb4028': '/dev/video0',
-        '48b5ddac-a396-5275-b6cb-32edddb4b5bf': '/dev/video1'
+        '25a955ae-5302-542f-a6c7-7198b08636d1': '/dev/video1',
+        '559361ab-dd00-5df7-8c13-1c7bdda1492b': '/dev/video2'
     }
 
 def open_camera_by_uuid(target_uuid, api_preference=cv2.CAP_V4L2):
@@ -44,7 +76,7 @@ def open_camera_by_uuid(target_uuid, api_preference=cv2.CAP_V4L2):
     return cap
 
 def generate_filename(prefix="image"):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3]  
     return f"{prefix}_{timestamp}.png"
 
 def send_image(png_binary, server_url):
@@ -70,8 +102,8 @@ class CameraThread(QThread):
         self.current_frame = None
         self.lock = threading.Lock()
         self.initial_size_set = False
-        self.PREVIEW_WIDTH = 420
-        self.PREVIEW_HEIGHT = 180
+        self.PREVIEW_WIDTH = 160
+        self.PREVIEW_HEIGHT = 160
     
     def run(self):
         try:
@@ -137,7 +169,7 @@ class Ui_MainWindow(QObject):
     def __init__(self):
         super().__init__()
         self.camera_thread = None  # 
-        self.SERVER_IP = '192.168.83.135'
+        self.SERVER_IP = '192.168.91.135'
         self.PORT = 5000
         self.server_url = f'http://{self.SERVER_IP}:{self.PORT}/upload'
         
@@ -157,14 +189,14 @@ class Ui_MainWindow(QObject):
         self.operation_start_time = time.time()
         
         # UI state
-        self.fixed_image_size = QSize(420, 180)
+        self.fixed_image_size = QSize(160, 140)
     
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("尿蛋白云存储")
         
-        MainWindow.resize(480, 280)
-        MainWindow.setMinimumSize(480, 280)
-        MainWindow.setMaximumSize(480, 280)
+        MainWindow.resize(240, 200)
+        MainWindow.setMinimumSize(240, 200)
+        MainWindow.setMaximumSize(240, 200)
         
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -188,12 +220,12 @@ class Ui_MainWindow(QObject):
                 color: white;
                 border: 1px solid #555;
                 border-radius: 8px;
-                font-size: 16px;
+                font-size: 8px;
             }
         """)
         
-        preview_width = 420
-        preview_height = 180
+        preview_width = 160
+        preview_height = 130      #this where can review the size
         self.image_label.setFixedSize(preview_width, preview_height)
         self.image_frame.setFixedSize(preview_width, preview_height)
         
@@ -238,7 +270,7 @@ class Ui_MainWindow(QObject):
         # Start button
         self.start_button = QtWidgets.QPushButton(button_frame)
         self.start_button.setText("启动")
-        self.start_button.setFixedHeight(42)
+        self.start_button.setFixedHeight(18)
         self.start_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -253,37 +285,16 @@ class Ui_MainWindow(QObject):
         """)
         button_layout.addWidget(self.start_button)
         
-        # # Stop button
-        # self.stop_button = QtWidgets.QPushButton(button_frame)
-        # self.stop_button.setText("Stop")
-        # self.stop_button.setFixedHeight(42)  #
-        # self.stop_button.setStyleSheet("""
-        #     QPushButton {
-        #         background-color: #f44336;
-        #         color: white;
-        #         border-radius: 6px;
-        #         font-size: 16px;
-        #         font-weight: bold;
-        #     }
-        #     QPushButton:hover {
-        #         background-color: #d32f2f;
-        #     }
-        #     QPushButton:disabled {
-        #         background-color: #cccccc;
-        #     }
-        # """)
-        # self.stop_button.setEnabled(False)
-        # button_layout.addWidget(self.stop_button)
         
         self.close_button = QtWidgets.QPushButton(button_frame)
         self.close_button.setText("关闭")
-        self.close_button.setFixedHeight(36)
+        self.close_button.setFixedHeight(18)
         self.close_button.setStyleSheet("""
             QPushButton {
                 background-color: #555555;
                 color: white;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 16px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -326,7 +337,7 @@ class Ui_MainWindow(QObject):
             if self.status_label:
                 self.status_label.setText("开始启动相机...")
             
-            self.camera_thread = CameraThread('9f7f9c0b-bd09-53db-9a2b-20daffdb4028')
+            self.camera_thread = CameraThread('25a955ae-5302-542f-a6c7-7198b08636d1')
             
             # Connect signals
             if self.image_label:
@@ -510,8 +521,8 @@ class CameraApp(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         
         self.setWindowTitle("尿蛋白云存储")
-        self.setMinimumSize(480, 280)
-        self.setMaximumSize(480, 280)
+        self.setMinimumSize(240, 200)
+        self.setMaximumSize(240, 200)
     
     def closeEvent(self, event):
         """Handle window close event"""
@@ -532,19 +543,20 @@ class CameraApp(QtWidgets.QMainWindow):
             self.ui.image_label.setPixmap(QtGui.QPixmap())
 
 if __name__ == "__main__":
-    os.environ["DISPLAY"] = ":0.0"
-    
-    app = QtWidgets.QApplication(sys.argv)
-    
-    
-    app.setStyle("Fusion")
-    font = QtGui.QFont()
-    font.setPointSize(10)
-    app.setFont(font)
-    
-    main_window = CameraApp()
-    main_window.show()
-    import signal
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-    
-    sys.exit(app.exec_())
+    with SingleInstance():
+        os.environ["DISPLAY"] = ":0.0"
+        
+        app = QtWidgets.QApplication(sys.argv)
+        
+        
+        app.setStyle("Fusion")
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        app.setFont(font)
+        
+        main_window = CameraApp()
+        main_window.show()
+        import signal
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        
+        sys.exit(app.exec_())
